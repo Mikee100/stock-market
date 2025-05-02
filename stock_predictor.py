@@ -17,7 +17,7 @@ st.subheader("Smart Entry Points & Position Sizing Calculator")
 
 def main():
     st.sidebar.header("Trading Parameters")
-    asset = st.sidebar.selectbox("Select Asset", ["EURUSD=X", "GC=F"])
+    asset = st.sidebar.selectbox("Select Asset", ["EURUSD=X", "GBPUSD=X", "GC=F"])  # Added GBP/USD
     timeframe = st.sidebar.selectbox("Timeframe", ["Daily", "Hourly"])
     
     # Risk Management Settings
@@ -132,11 +132,19 @@ def main():
             future_predictions_today=future_predictions_today if future_hours else None
         )
 
+        # Update pip value and size based on selected asset
+        if asset == "GC=F":
+            pip_value = 1
+            pip_size = 0.1
+        else:  # For EUR/USD and GBP/USD
+            pip_value = 10
+            pip_size = 0.0001
+
         trade_params.update({
             'risk_percent': risk_percent,
             'account_size': account_size,
-            'pip_value': 10 if asset == "EURUSD=X" else 1,
-            'pip_size': 0.0001 if asset == "EURUSD=X" else 0.1
+            'pip_value': pip_value,
+            'pip_size': pip_size
         })
 
         display_trade_dashboard(trade_params)
@@ -161,8 +169,6 @@ def main():
             line=dict(color='green', width=2, dash='dot')
         ))
         
-        # Replace the problematic plotting section with this:
-
         if future_hours is not None and len(future_dates_today) > 0:
                 # Create confidence interval trace
                 fig.add_trace(go.Scatter(
@@ -259,37 +265,6 @@ def main():
         )
         st.plotly_chart(fig_loss, use_container_width=True)
         
-        # Future predictions table
-      # In the visualization section where you create the Plotly figure, replace the problematic code with:
-
-        if future_hours is not None and len(future_dates_today) > 0:
-            # Convert DatetimeIndex to numpy array for concatenation
-            dates_array = future_dates_today.to_numpy()
-            fig.add_trace(go.Scatter(
-                x=np.concatenate([dates_array, dates_array[::-1]]),
-                y=np.concatenate([
-                    (future_predictions_today.flatten() + 1.96*pred_std_today.flatten()),
-                    (future_predictions_today.flatten() - 1.96*pred_std_today.flatten())[::-1]
-                ]),
-                fill='toself',
-                fillcolor='rgba(255,165,0,0.2)',
-                line=dict(color='rgba(255,255,255,0)'),
-                name='95% Confidence Interval'
-            ))
-        elif future_days is not None:
-            # Convert DatetimeIndex to numpy array for concatenation
-            dates_array = future_dates.to_numpy()
-            fig.add_trace(go.Scatter(
-                x=np.concatenate([dates_array, dates_array[::-1]]),
-                y=np.concatenate([
-                    (future_predictions.flatten() + 1.96*pred_std.flatten()),
-                    (future_predictions.flatten() - 1.96*pred_std.flatten())[::-1]
-                ]),
-                fill='toself',
-                fillcolor='rgba(255,165,0,0.2)',
-                line=dict(color='rgba(255,255,255,0)'),
-                name='95% Confidence Interval'
-            ))
         # Model evaluation metrics
         st.subheader("Model Evaluation Metrics")
         eval_metrics = forecaster.evaluate_model(X[-100:], y[-100:])  # Evaluate on last 100 samples
@@ -306,7 +281,16 @@ def main():
     
     with st.expander("News Sentiment Analysis", expanded=True):
         with st.spinner("Fetching and analyzing financial news..."):
-            news_df = news_analyzer.fetch_financial_news(asset.split('=')[0])
+            # For forex pairs, we'll analyze both currencies separately
+            if asset.endswith("=X"):
+                base_currency = asset[:3]  # EUR or GBP
+                quote_currency = asset[3:6]  # USD
+                news_df1 = news_analyzer.fetch_financial_news(base_currency)
+                news_df2 = news_analyzer.fetch_financial_news(quote_currency)
+                news_df = pd.concat([news_df1, news_df2])
+            else:
+                news_df = news_analyzer.fetch_financial_news(asset.split('=')[0])
+            
             news_df = news_analyzer.analyze_sentiment(news_df)
         
         if not news_df.empty:
